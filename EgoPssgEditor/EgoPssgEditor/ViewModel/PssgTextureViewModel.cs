@@ -1,4 +1,5 @@
 ﻿using EgoEngineLibrary.Graphics;
+using EgoEngineLibrary.Graphics.Dds;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -91,8 +92,9 @@ namespace EgoPssgEditor.ViewModel
             try
             {
                 this.Preview = null;
-                dds = new DdsFile(Texture, false);
-                dds.Write(File.Open(System.AppDomain.CurrentDomain.BaseDirectory + "\\temp.dds", FileMode.Create, FileAccess.ReadWrite, FileShare.Read), -1);
+                dds = Texture.ToDdsFile(false);
+                using (var fs = File.Open(System.AppDomain.CurrentDomain.BaseDirectory + "\\temp.dds", FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
+                    dds.Write(fs, -1);
                 int maxDimension = (int)Math.Max(dds.header.width, dds.header.height);
 
                 image = new CSharpImageLibrary.ImageEngineImage(System.AppDomain.CurrentDomain.BaseDirectory + "\\temp.dds", maxDimension);
