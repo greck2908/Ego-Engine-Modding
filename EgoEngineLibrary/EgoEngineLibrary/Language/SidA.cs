@@ -25,7 +25,6 @@
         public SidA(int m)
         {
             Magic = m;
-            Entry = Array.Empty<SidaEntry>();
         }
 
         public void Write(LngBinaryWriter writer)

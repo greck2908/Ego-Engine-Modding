@@ -13,7 +13,6 @@
         public string ResourceType { get; set; }
 
         public Int32 Unknown { get; set; }
-        public Int16 Unknown2 { get; set; }
 
         public List<ErpFragment> Fragments { get; set; }
 
@@ -83,15 +82,16 @@
 
         private UInt32 _resourceInfoLength;
 
-        public ErpResource(ErpFile parentFile)
+        public ErpResource()
         {
-            this.ParentFile = parentFile;
-            this.Identifier = string.Empty;
-            this.ResourceType = string.Empty;
             this.Unknown = 1;
-            this.Unknown2 = 0;
             this.Fragments = new List<ErpFragment>();
             this.Hash = new byte[16];
+        }
+        public ErpResource(ErpFile parentFile)
+            : this()
+        {
+            this.ParentFile = parentFile;
         }
 
         public void Read(ErpBinaryReader reader)
@@ -101,10 +101,6 @@
             this.ResourceType = reader.ReadString(16);
 
             this.Unknown = reader.ReadInt32();
-            if (this.ParentFile.Version >= 4)
-            {
-                this.Unknown2 = reader.ReadInt16();
-            }
 
             byte numResources = reader.ReadByte();
 
@@ -128,10 +124,6 @@
             writer.Write(this.Identifier);
             writer.Write(this.ResourceType, 16);
             writer.Write(this.Unknown);
-            if (this.ParentFile.Version >= 4)
-            {
-                writer.Write(this.Unknown2);
-            }
             writer.Write((byte)this.Fragments.Count);
 
             foreach (ErpFragment res in this.Fragments)
@@ -158,11 +150,6 @@
 
             this._resourceInfoLength *= (UInt32)this.Fragments.Count;
             this._resourceInfoLength += (UInt32)this.Identifier.Length + 24;
-
-            if (this.ParentFile.Version >= 4)
-            {
-                this._resourceInfoLength += 2;
-            }
 
             if (this.ParentFile.Version > 2)
             {
@@ -216,7 +203,18 @@
             return false;
         }
 
-        public ErpFragment? TryGetFragment(string name, int count)
+        public ErpFragment TryGetFragment(string name, int count)
+        {
+            try
+            {
+                return GetFragment(name, count);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        public ErpFragment GetFragment(string name, int count)
         {
             foreach (ErpFragment fragment in Fragments)
             {
@@ -230,14 +228,7 @@
                 }
             }
 
-            return null;
-        }
-        public ErpFragment GetFragment(string name, int count)
-        {
-            var fragment = TryGetFragment(name, count);
-            if (fragment == null)
-                throw new ArgumentOutOfRangeException(nameof(name));
-            return fragment;
+            throw new ArgumentOutOfRangeException("name", name);
         }
     }
 }

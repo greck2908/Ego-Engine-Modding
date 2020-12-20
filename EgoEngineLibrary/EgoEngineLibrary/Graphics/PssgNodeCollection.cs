@@ -23,7 +23,14 @@
         {
             get
             {
-                return nodes[index];
+                if (index < 0 || index >= nodes.Count)
+                {
+                    return null;
+                }
+                else
+                {
+                    return nodes[index];
+                }
             }
         }
         public PssgNode this[string nodeName]
@@ -37,8 +44,7 @@
                         return nodes[i];
                     }
                 }
-
-                throw new ArgumentOutOfRangeException(nameof(nodeName));
+                return null;
             }
         }
 
@@ -46,7 +52,7 @@
         {
             this.nodes.Add(node);
         }
-        internal PssgNode? Set(PssgNode node, PssgNode newNode)
+        internal PssgNode Set(PssgNode node, PssgNode newNode)
         {
             for (int i = 0; i < this.nodes.Count; i++)
             {

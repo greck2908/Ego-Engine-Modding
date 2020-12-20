@@ -43,7 +43,7 @@ namespace EgoEngineLibrary.Archive.Erp.Data
             Fragment0.FromFragment(resource.GetFragment("temp", 0));
             Fragment1.FromFragment(resource.GetFragment("temp", 1));
 
-            ErpFragment? mipsFragment = resource.TryGetFragment("mips", 0) ?? resource.TryGetFragment("temp", 2);
+            ErpFragment mipsFragment = resource.TryGetFragment("mips", 0);
             if (mipsFragment != null)
             {
                 Frag2.FromFragment(mipsFragment);
@@ -65,7 +65,7 @@ namespace EgoEngineLibrary.Archive.Erp.Data
             Fragment0.ToFragment(resource.GetFragment("temp", 0));
             Fragment1.ToFragment(resource.GetFragment("temp", 1));
 
-            ErpFragment? mipsFragment = resource.TryGetFragment("mips", 0) ?? resource.TryGetFragment("temp", 2);
+            ErpFragment mipsFragment = resource.TryGetFragment("mips", 0);
             if (mipsFragment != null)
             {
                 Frag2.ToFragment(mipsFragment);
@@ -85,7 +85,6 @@ namespace EgoEngineLibrary.Archive.Erp.Data
                     return width * height / 2;
                 case ErpGfxSurfaceFormat.DXT5: // ferrari_sfc
                 case ErpGfxSurfaceFormat.DXT5_SRGB: // ferrari_decal
-                case ErpGfxSurfaceFormat.BC2_SRGB:
                 case ErpGfxSurfaceFormat.ATI2: // ferrari_wheel_nm
                 case ErpGfxSurfaceFormat.BC6: // key0_2016; environment abu_dhabi tree_palm_06
                 case ErpGfxSurfaceFormat.BC7:

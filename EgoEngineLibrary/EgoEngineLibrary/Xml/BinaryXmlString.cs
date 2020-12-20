@@ -9,15 +9,10 @@
     {
         private string[] values;
 
-        public BinaryXmlString()
-        {
-            values = Array.Empty<string>();
-        }
-
         // Reads all the strings available in the binary xml file
         // First Part is string data
         // Second part is position index of string data, not used by program
-        public void Read(XmlBinaryReader reader)
+        public BinaryXmlString(XmlBinaryReader reader)
         {
             // Section 3
             reader.ReadInt32();

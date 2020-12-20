@@ -76,8 +76,6 @@ namespace EgoErpArchiver.ViewModel
                 {
                     // TRN~ abu_dhabi.erp is JPK file
                     case "ActorSceneData":
-                    case "AICornering": // Grid 2019
-                    case "AIGrip": // seen in Grid 2019 as xml (erp v4)
                     case "AISplineData":
                     case "AIBrakeSettings":
                     case "CrowdAnimation":
@@ -86,7 +84,6 @@ namespace EgoErpArchiver.ViewModel
                     case "CrowdPalette":
                     case "CrowdPrpPalette":
                     case "ECA~":
-                    case "FemsStrengthBox": // Grid 2019
                     case "FFBD":
                     case "IBLConfig":
                     case "PPRP":

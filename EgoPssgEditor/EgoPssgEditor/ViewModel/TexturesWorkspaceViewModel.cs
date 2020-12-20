@@ -1,5 +1,4 @@
 ﻿using EgoEngineLibrary.Graphics;
-using EgoEngineLibrary.Graphics.Dds;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
@@ -178,9 +177,8 @@ namespace EgoPssgEditor.ViewModel
             {
                 try
                 {
-                    DdsFile dds = node.ToDdsFile(false);
-                    using (var fs = File.Open(dialog.FileName, FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
-                        dds.Write(fs, -1);
+                    DdsFile dds = new DdsFile(node, false);
+                    dds.Write(File.Open(dialog.FileName, FileMode.Create), -1);
                 }
                 catch (Exception ex)
                 {
@@ -206,7 +204,7 @@ namespace EgoPssgEditor.ViewModel
                 try
                 {
                     DdsFile dds = new DdsFile(File.Open(dialog.FileName, FileMode.Open));
-                    dds.ToPssgNode(node);
+                    dds.Write(node);
                     texView.GetPreview();
                 }
                 catch (Exception ex)
@@ -229,10 +227,8 @@ namespace EgoPssgEditor.ViewModel
                 DdsFile dds;
                 foreach (PssgTextureViewModel texView in Textures)
                 {
-                    dds = texView.Texture.ToDdsFile(false);
-                    string filePath = mainView.FilePath.Replace(".", "_") + "_textures" + "\\" + texView.Texture.Attributes["id"].DisplayValue + ".dds";
-                    using (var fs = File.Open(filePath, FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
-                        dds.Write(fs, -1);
+                    dds = new DdsFile(texView.Texture, false);
+                    dds.Write(File.Open(mainView.FilePath.Replace(".", "_") + "_textures" + "\\" + texView.Texture.GetAttribute("id").DisplayValue + ".dds", FileMode.Create), -1);
                 }
                 MessageBox.Show("Textures exported successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -257,10 +253,10 @@ namespace EgoPssgEditor.ViewModel
                     {
                         foreach (PssgTextureViewModel texView in Textures)
                         {
-                            if (Path.GetFileNameWithoutExtension(filePath) == texView.Texture.Attributes["id"].ToString())
+                            if (Path.GetFileNameWithoutExtension(filePath) == texView.Texture.GetAttribute("id").ToString())
                             {
                                 dds = new DdsFile(File.Open(filePath, FileMode.Open));
-                                dds.ToPssgNode(texView.Texture);
+                                dds.Write(texView.Texture);
                                 if (texView.IsSelected)
                                 {
                                     texView.GetPreview();

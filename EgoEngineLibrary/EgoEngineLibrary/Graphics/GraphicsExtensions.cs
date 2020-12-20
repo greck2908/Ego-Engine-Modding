@@ -1,7 +1,6 @@
 ﻿using EgoEngineLibrary.Archive.Erp;
 using EgoEngineLibrary.Archive.Erp.Data;
 using EgoEngineLibrary.Graphics.Dds;
-using K4os.Compression.LZ4;
 using MiscUtil.Conversion;
 using System;
 using System.Collections.Generic;
@@ -80,12 +79,6 @@ namespace EgoEngineLibrary.Graphics
                     dds.header.ddspf.fourCC = BitConverter.ToUInt32(Encoding.UTF8.GetBytes("DX10"), 0);
                     dds.header10.dxgiFormat = DXGI_Format.DXGI_FORMAT_BC3_UNORM_SRGB;
                     break;
-                case ErpGfxSurfaceFormat.BC2_SRGB:
-                    dds.header.flags |= DdsHeader.Flags.DDSD_LINEARSIZE;
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_FOURCC;
-                    dds.header.ddspf.fourCC = BitConverter.ToUInt32(Encoding.UTF8.GetBytes("DX10"), 0);
-                    dds.header10.dxgiFormat = DXGI_Format.DXGI_FORMAT_BC2_UNORM_SRGB;
-                    break;
                 case ErpGfxSurfaceFormat.ATI1: // gameparticles k_smoke
                     dds.header.flags |= DdsHeader.Flags.DDSD_LINEARSIZE;
                     dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_FOURCC;
@@ -148,7 +141,7 @@ namespace EgoEngineLibrary.Graphics
                         byte[] mipData = reader.ReadBytes((int)mip.PackedSize);
                         if (mip.PackedSize != (ulong)mipData.LongLength)
                         {
-                            throw new FileFormatException($"The mipmaps file, and erp data do not match. (compressed size)");
+                            throw new FileFormatException($"The mipmaps file, and erp data do not match");
                         }
 
                         switch (mip.Compression)
@@ -157,13 +150,8 @@ namespace EgoEngineLibrary.Graphics
                                 output.Write(mipData, 0, mipData.Length);
                                 break;
                             case ErpCompressionAlgorithm.LZ4:
-                                byte[] decompressedMipData = new byte[(int)mip.Size];
-                                int decompSize = LZ4Codec.Decode(mipData, 0, mipData.Length, decompressedMipData, 0, decompressedMipData.Length);
-                                if (decompSize < 0)
-                                {
-                                    throw new InvalidDataException($"The mipmaps file, and erp data do not match. (uncompressed size)");
-                                }
-                                output.Write(decompressedMipData, 0, decompSize);
+                                mipData = LZ4.LZ4Codec.Decode(mipData, 0, mipData.Length, (int)mip.Size);
+                                output.Write(mipData, 0, mipData.Length);
                                 break;
                             default:
                                 throw new NotSupportedException($"MipMap compression type {mip.Compression} is not supported");
@@ -279,26 +267,21 @@ namespace EgoEngineLibrary.Graphics
                         mip.Offset = offset;
 
                         byte[] mipData = reader.ReadBytes((int)mipLinearSize);
-                        ulong mipPackedSize = (ulong)mipData.Length;
                         switch (mip.Compression)
                         {
                             case ErpCompressionAlgorithm.LZ4:
-                                byte[] compressedMipData = new byte[LZ4Codec.MaximumOutputSize(mipData.Length)];
-                                int compSize = LZ4Codec.Encode(mipData, 0, mipData.Length, compressedMipData, 0, compressedMipData.Length, LZ4Level.L12_MAX);
-                                writer.Write(compressedMipData, 0, compSize);
-                                mipPackedSize = (ulong)compSize;
+                                mipData = LZ4.LZ4Codec.EncodeHC(mipData, 0, mipData.Length);
                                 break;
                             case ErpCompressionAlgorithm.None:
-                                writer.Write(mipData);
-                                break;
                             default:
-                                throw new NotSupportedException($"MipMap compression type {mip.Compression} is not supported");
+                                break;
                         }
+                        writer.Write(mipData);
 
-                        mip.PackedSize = mipPackedSize;
+                        mip.PackedSize = (UInt64)mipData.LongLength;
                         mip.Size = mipLinearSize;
 
-                        offset += mipPackedSize;
+                        offset += (UInt64)mipData.LongLength;
                         mipLinearSize /= 4;
 
                         newMips.Add(mip);
@@ -417,10 +400,6 @@ namespace EgoEngineLibrary.Graphics
                     {
                         imageType = ErpGfxSurfaceFormat.DXT5_SRGB;
                     }
-                    else if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC2_UNORM_SRGB)
-                    {
-                        imageType = ErpGfxSurfaceFormat.BC2_SRGB;
-                    }
                     else if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC4_TYPELESS ||
                         dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC4_UNORM ||
                         dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC4_SNORM)
@@ -449,320 +428,6 @@ namespace EgoEngineLibrary.Graphics
             }
 
             return imageType;
-        }
-        
-        public static DdsFile ToDdsFile(this PssgNode node, bool cubePreview)
-        {
-            DdsFile dds = new DdsFile();
-
-            dds.header.height = (uint)(node.Attributes["height"].Value);
-            dds.header.width = (uint)(node.Attributes["width"].Value);
-            switch ((string)node.Attributes["texelFormat"].Value)
-            {
-                // gimp doesn't like pitch, so we'll go with linear size
-                case "dxt1":
-                    dds.header.flags |= DdsHeader.Flags.DDSD_LINEARSIZE;
-                    dds.header.pitchOrLinearSize = ((uint)node.Attributes["height"].Value * (uint)node.Attributes["width"].Value) / 2;
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_FOURCC;
-                    dds.header.ddspf.fourCC = BitConverter.ToUInt32(Encoding.UTF8.GetBytes(((string)node.Attributes["texelFormat"].Value).ToUpper()), 0);
-                    break;
-                case "dxt1_srgb":
-                    dds.header.flags |= DdsHeader.Flags.DDSD_LINEARSIZE;
-                    dds.header.pitchOrLinearSize = ((uint)node.Attributes["height"].Value * (uint)node.Attributes["width"].Value) / 2;
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_FOURCC;
-                    dds.header.ddspf.fourCC = BitConverter.ToUInt32(Encoding.UTF8.GetBytes("DX10"), 0);
-                    dds.header10.dxgiFormat = DXGI_Format.DXGI_FORMAT_BC1_UNORM_SRGB;
-                    break;
-                case "dxt2":
-                case "dxt3":
-                case "dxt4":
-                case "dxt5":
-                    dds.header.flags |= DdsHeader.Flags.DDSD_LINEARSIZE;
-                    dds.header.pitchOrLinearSize = ((uint)node.Attributes["height"].Value * (uint)node.Attributes["width"].Value);
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_FOURCC;
-                    dds.header.ddspf.fourCC = BitConverter.ToUInt32(Encoding.UTF8.GetBytes(((string)node.Attributes["texelFormat"].Value).ToUpper()), 0);
-                    break;
-                case "dxt3_srgb":
-                    dds.header.flags |= DdsHeader.Flags.DDSD_LINEARSIZE;
-                    dds.header.pitchOrLinearSize = ((uint)node.Attributes["height"].Value * (uint)node.Attributes["width"].Value);
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_FOURCC;
-                    dds.header.ddspf.fourCC = BitConverter.ToUInt32(Encoding.UTF8.GetBytes("DX10"), 0);
-                    dds.header10.dxgiFormat = DXGI_Format.DXGI_FORMAT_BC2_UNORM_SRGB;
-                    break;
-                case "dxt5_srgb":
-                    dds.header.flags |= DdsHeader.Flags.DDSD_LINEARSIZE;
-                    dds.header.pitchOrLinearSize = ((uint)node.Attributes["height"].Value * (uint)node.Attributes["width"].Value);
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_FOURCC;
-                    dds.header.ddspf.fourCC = BitConverter.ToUInt32(Encoding.UTF8.GetBytes("DX10"), 0);
-                    dds.header10.dxgiFormat = DXGI_Format.DXGI_FORMAT_BC3_UNORM_SRGB;
-                    break;
-                case "BC7":
-                    dds.header.flags |= DdsHeader.Flags.DDSD_LINEARSIZE;
-                    dds.header.pitchOrLinearSize = ((uint)node.Attributes["height"].Value * (uint)node.Attributes["width"].Value);
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_FOURCC;
-                    dds.header.ddspf.fourCC = BitConverter.ToUInt32(Encoding.UTF8.GetBytes("DX10"), 0);
-                    dds.header10.dxgiFormat = DXGI_Format.DXGI_FORMAT_BC7_UNORM;
-                    break;
-                case "BC7_srgb":
-                    dds.header.flags |= DdsHeader.Flags.DDSD_LINEARSIZE;
-                    dds.header.pitchOrLinearSize = ((uint)node.Attributes["height"].Value * (uint)node.Attributes["width"].Value);
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_FOURCC;
-                    dds.header.ddspf.fourCC = BitConverter.ToUInt32(Encoding.UTF8.GetBytes("DX10"), 0);
-                    dds.header10.dxgiFormat = DXGI_Format.DXGI_FORMAT_BC7_UNORM_SRGB;
-                    break;
-                case "ui8x4":
-                case "u8x4":
-                    dds.header.flags |= DdsHeader.Flags.DDSD_PITCH;
-                    dds.header.pitchOrLinearSize = ((uint)node.Attributes["height"].Value * (uint)node.Attributes["width"].Value); // is this right?
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_ALPHAPIXELS | DdsPixelFormat.Flags.DDPF_RGB;
-                    dds.header.ddspf.fourCC = 0;
-                    dds.header.ddspf.rGBBitCount = 32;
-                    dds.header.ddspf.rBitMask = 0xFF0000;
-                    dds.header.ddspf.gBitMask = 0xFF00;
-                    dds.header.ddspf.bBitMask = 0xFF;
-                    dds.header.ddspf.aBitMask = 0xFF000000;
-                    break;
-                case "u8":
-                    dds.header.flags |= DdsHeader.Flags.DDSD_PITCH;
-                    dds.header.pitchOrLinearSize = ((uint)node.Attributes["height"].Value * (uint)node.Attributes["width"].Value); // is this right?
-                    // Interchanging the commented values will both work, not sure which is better
-                    dds.header.ddspf.flags |= DdsPixelFormat.Flags.DDPF_LUMINANCE;
-                    //header.ddspf.flags |= DDS_PIXELFORMAT.Flags.DDPF_ALPHA;
-                    dds.header.ddspf.fourCC = 0;
-                    dds.header.ddspf.rGBBitCount = 8;
-                    dds.header.ddspf.rBitMask = 0xFF;
-                    //header.ddspf.aBitMask = 0xFF;
-                    break;
-                default:
-                    throw new NotSupportedException("Texel format not supported.");
-            }
-
-            // Mip Maps
-            if (node.HasAttribute("automipmap") == true && node.HasAttribute("numberMipMapLevels") == true)
-            {
-                if ((uint)node.Attributes["automipmap"].Value == 0 && (uint)node.Attributes["numberMipMapLevels"].Value > 0)
-                {
-                    dds.header.flags |= DdsHeader.Flags.DDSD_MIPMAPCOUNT;
-                    dds.header.mipMapCount = (uint)((uint)node.Attributes["numberMipMapLevels"].Value + 1);
-                    dds.header.caps |= DdsHeader.Caps.DDSCAPS_MIPMAP | DdsHeader.Caps.DDSCAPS_COMPLEX;
-                }
-            }
-
-            // Byte Data
-            List<PssgNode> textureImageBlocks = node.FindNodes("TEXTUREIMAGEBLOCK");
-            if ((uint)node.Attributes["imageBlockCount"].Value > 1)
-            {
-                dds.bdata2 = new Dictionary<int, byte[]>();
-                for (int i = 0; i < textureImageBlocks.Count; i++)
-                {
-                    switch (textureImageBlocks[i].Attributes["typename"].ToString())
-                    {
-                        case "Raw":
-                            dds.header.caps2 |= DdsHeader.Caps2.DDSCAPS2_CUBEMAP_POSITIVEX;
-                            dds.bdata2.Add(0, (byte[])textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value);
-                            break;
-                        case "RawNegativeX":
-                            dds.header.caps2 |= DdsHeader.Caps2.DDSCAPS2_CUBEMAP_NEGATIVEX;
-                            dds.bdata2.Add(1, (byte[])textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value);
-                            break;
-                        case "RawPositiveY":
-                            dds.header.caps2 |= DdsHeader.Caps2.DDSCAPS2_CUBEMAP_POSITIVEY;
-                            dds.bdata2.Add(2, (byte[])textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value);
-                            break;
-                        case "RawNegativeY":
-                            dds.header.caps2 |= DdsHeader.Caps2.DDSCAPS2_CUBEMAP_NEGATIVEY;
-                            dds.bdata2.Add(3, (byte[])textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value);
-                            break;
-                        case "RawPositiveZ":
-                            dds.header.caps2 |= DdsHeader.Caps2.DDSCAPS2_CUBEMAP_POSITIVEZ;
-                            dds.bdata2.Add(4, (byte[])textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value);
-                            break;
-                        case "RawNegativeZ":
-                            dds.header.caps2 |= DdsHeader.Caps2.DDSCAPS2_CUBEMAP_NEGATIVEZ;
-                            dds.bdata2.Add(5, (byte[])textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value);
-                            break;
-                    }
-                }
-                if (cubePreview == true)
-                {
-                    dds.header.caps2 = 0;
-                }
-                else if (dds.bdata2.Count == (uint)node.Attributes["imageBlockCount"].Value)
-                {
-                    dds.header.caps2 |= DdsHeader.Caps2.DDSCAPS2_CUBEMAP;
-                    dds.header.flags = dds.header.flags ^ DdsHeader.Flags.DDSD_LINEARSIZE;
-                    dds.header.pitchOrLinearSize = 0;
-                    dds.header.caps |= DdsHeader.Caps.DDSCAPS_COMPLEX;
-                }
-                else
-                {
-                    throw new Exception("Loading cubemap failed because not all blocks were found. (Read)");
-                }
-            }
-            else
-            {
-                dds.bdata = (byte[])textureImageBlocks[0].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value;
-            }
-
-            return dds;
-        }
-
-        public static void ToPssgNode(this DdsFile dds, PssgNode node)
-        {
-
-            node.Attributes["height"].Value = dds.header.height;
-            node.Attributes["width"].Value = dds.header.width;
-            if (node.HasAttribute("numberMipMapLevels") == true)
-            {
-                if ((int)dds.header.mipMapCount - 1 >= 0)
-                {
-                    node.Attributes["numberMipMapLevels"].Value = dds.header.mipMapCount - 1;
-                }
-                else
-                {
-                    node.Attributes["numberMipMapLevels"].Value = 0u;
-                }
-            }
-            if (dds.header.ddspf.rGBBitCount == 32)
-            {
-                node.Attributes["texelFormat"].Value = "ui8x4";
-            }
-            else if (dds.header.ddspf.rGBBitCount == 8)
-            {
-                node.Attributes["texelFormat"].Value = "u8";
-            }
-            else if (dds.header.ddspf.fourCC == 808540228) //DX10
-            {
-                if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC7_TYPELESS ||
-                    dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC7_UNORM)
-                {
-                    node.Attributes["texelFormat"].Value = "BC7";
-                }
-                else if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC7_UNORM_SRGB)
-                {
-                    node.Attributes["texelFormat"].Value = "BC7_srgb";
-                }
-                else if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC1_TYPELESS ||
-                    dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC1_UNORM)
-                {
-                    node.Attributes["texelFormat"].Value = "dxt1";
-                }
-                else if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC1_UNORM_SRGB)
-                {
-                    node.Attributes["texelFormat"].Value = "dxt1_srgb";
-                }
-                else if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC2_TYPELESS ||
-                    dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC2_UNORM)
-                {
-                    node.Attributes["texelFormat"].Value = "dxt3";
-                }
-                else if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC2_UNORM_SRGB)
-                {
-                    node.Attributes["texelFormat"].Value = "dxt3_srgb";
-                }
-                else if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC3_TYPELESS ||
-                    dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC3_UNORM)
-                {
-                    node.Attributes["texelFormat"].Value = "dxt5";
-                }
-                else if (dds.header10.dxgiFormat == DXGI_Format.DXGI_FORMAT_BC3_UNORM_SRGB)
-                {
-                    node.Attributes["texelFormat"].Value = "dxt5_srgb";
-                }
-                else
-                {
-                    throw new FormatException("The dds has an invalid or unsupported format type!");
-                }
-            }
-            else
-            {
-                node.Attributes["texelFormat"].Value = Encoding.UTF8.GetString(BitConverter.GetBytes(dds.header.ddspf.fourCC)).ToLower();
-            }
-            List<PssgNode> textureImageBlocks = node.FindNodes("TEXTUREIMAGEBLOCK");
-            if (dds.bdata2 != null && dds.bdata2.Count > 0)
-            {
-                for (int i = 0; i < textureImageBlocks.Count; i++)
-                {
-                    switch (textureImageBlocks[i].Attributes["typename"].ToString())
-                    {
-                        case "Raw":
-                            if (dds.bdata2.ContainsKey(0) == true)
-                            {
-                                textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value = dds.bdata2[0];
-                                textureImageBlocks[i].Attributes["size"].Value = (UInt32)dds.bdata2[0].Length;
-                            }
-                            else
-                            {
-                                throw new Exception("Loading cubemap failed because not all blocks were found. (Write)");
-                            }
-                            break;
-                        case "RawNegativeX":
-                            if (dds.bdata2.ContainsKey(1) == true)
-                            {
-                                textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value = dds.bdata2[1];
-                                textureImageBlocks[i].Attributes["size"].Value = (UInt32)dds.bdata2[1].Length;
-                            }
-                            else
-                            {
-                                throw new Exception("Loading cubemap failed because not all blocks were found. (Write)");
-                            }
-                            break;
-                        case "RawPositiveY":
-                            if (dds.bdata2.ContainsKey(2) == true)
-                            {
-                                textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value = dds.bdata2[2];
-                                textureImageBlocks[i].Attributes["size"].Value = (UInt32)dds.bdata2[2].Length;
-                            }
-                            else
-                            {
-                                throw new Exception("Loading cubemap failed because not all blocks were found. (Write)");
-                            }
-                            break;
-                        case "RawNegativeY":
-                            if (dds.bdata2.ContainsKey(3) == true)
-                            {
-                                textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value = dds.bdata2[3];
-                                textureImageBlocks[i].Attributes["size"].Value = (UInt32)dds.bdata2[3].Length;
-                            }
-                            else
-                            {
-                                throw new Exception("Loading cubemap failed because not all blocks were found. (Write)");
-                            }
-                            break;
-                        case "RawPositiveZ":
-                            if (dds.bdata2.ContainsKey(4) == true)
-                            {
-                                textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value = dds.bdata2[4];
-                                textureImageBlocks[i].Attributes["size"].Value = (UInt32)dds.bdata2[4].Length;
-                            }
-                            else
-                            {
-                                throw new Exception("Loading cubemap failed because not all blocks were found. (Write)");
-                            }
-                            break;
-                        case "RawNegativeZ":
-                            if (dds.bdata2.ContainsKey(5) == true)
-                            {
-                                textureImageBlocks[i].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value = dds.bdata2[5];
-                                textureImageBlocks[i].Attributes["size"].Value = (UInt32)dds.bdata2[5].Length;
-                            }
-                            else
-                            {
-                                throw new Exception("Loading cubemap failed because not all blocks were found. (Write)");
-                            }
-                            break;
-                    }
-                }
-            }
-            else
-            {
-                if ((uint)node.Attributes["imageBlockCount"].Value > 1)
-                {
-                    throw new Exception("Loading cubemap failed because not all blocks were found. (Write)");
-                }
-                textureImageBlocks[0].FindNodes("TEXTUREIMAGEBLOCKDATA")[0].Value = dds.bdata;
-                textureImageBlocks[0].Attributes["size"].Value = (UInt32)dds.bdata.Length;
-            }
         }
     }
 }

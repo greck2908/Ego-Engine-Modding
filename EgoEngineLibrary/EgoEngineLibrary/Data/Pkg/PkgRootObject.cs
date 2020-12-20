@@ -10,7 +10,6 @@ namespace EgoEngineLibrary.Data.Pkg
 {
     public class PkgRootObject : PkgArray
     {
-        private const uint Magic = 1735094305;
         string name;
 
         public string Name
@@ -54,9 +53,7 @@ namespace EgoEngineLibrary.Data.Pkg
 
         public override void Read(PkgBinaryReader reader)
         {
-            var magic = reader.ReadUInt32();
-            if (magic != Magic)
-                throw new FileFormatException("This is not a pkg file.");
+            reader.ReadBytes(4);
             name = reader.ReadString(4);
 
             Elements[0].Read(reader);
@@ -66,7 +63,7 @@ namespace EgoEngineLibrary.Data.Pkg
         {
             PkgValue._offset = 0;
             UpdateOffsets();
-            writer.Write(Magic);
+            writer.Write("!pkg", 4);
             writer.Write(name, 4);
 
             Elements[0].Write(writer);
@@ -81,7 +78,7 @@ namespace EgoEngineLibrary.Data.Pkg
 
             reader.Read();
             reader.Read();
-            name = (string?)reader.Value ?? string.Empty;
+            name = (string)reader.Value;
 
             reader.Read();
             Elements[0].FromJson(reader);

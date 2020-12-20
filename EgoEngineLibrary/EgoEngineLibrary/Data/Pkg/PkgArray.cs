@@ -21,10 +21,14 @@ namespace EgoEngineLibrary.Data.Pkg
             }
         }
 
-        public PkgArray(PkgFile parentFile, Func<PkgFile, T> factory)
+        private PkgArray(PkgFile parentFile)
             : base(parentFile)
         {
             elements = new List<T>();
+        }
+        public PkgArray(PkgFile parentFile, Func<PkgFile, T> factory)
+            : this(parentFile)
+        {
             elementFactory = factory;
         }
 

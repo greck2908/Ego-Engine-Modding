@@ -1,7 +1,5 @@
 ﻿namespace EgoEngineLibrary.Archive.Erp
 {
-    using ICSharpCode.SharpZipLib.Zip.Compression;
-    using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
     using MiscUtil.Conversion;
     using System;
     using System.Collections.Generic;
@@ -9,7 +7,6 @@
     using System.IO.Compression;
     using System.Linq;
     using System.Text;
-    using Zstandard.Net;
 
     public class ErpFragment
     {
@@ -26,13 +23,16 @@
 
         internal byte[] _data;
 
-        public ErpFragment(ErpFile parentFile)
+        public ErpFragment()
         {
-            this.ParentFile = parentFile;
             this.Name = "temp";
             this.Flags = 16;
             this.Compression = ErpCompressionAlgorithm.Zlib;
-            this._data = Array.Empty<byte>();
+        }
+        public ErpFragment(ErpFile parentFile)
+            : this()
+        {
+            this.ParentFile = parentFile;
         }
 
         public void Read(ErpBinaryReader reader)
@@ -100,26 +100,10 @@
                 {
                     case ErpCompressionAlgorithm.None:
                     case ErpCompressionAlgorithm.None2:
-                    case ErpCompressionAlgorithm.None3:
                         data = this._data;
                         break;
                     case ErpCompressionAlgorithm.Zlib:
-                        using (var ms = new MemoryStream(this._data))
-                        using (var iis = new InflaterInputStream(ms))
-                        using (var mso = new MemoryStream())
-                        {
-                            iis.CopyTo(mso);
-                            data = mso.ToArray();
-                        }
-                        break;
-                    case ErpCompressionAlgorithm.ZStandard:
-                        using (var ms = new MemoryStream(this._data))
-                        using (var zss = new ZstandardStream(ms, CompressionMode.Decompress))
-                        using (var mso = new MemoryStream())
-                        {
-                            zss.CopyTo(mso);
-                            data = mso.ToArray();
-                        }
+                        data = Ionic.Zlib.ZlibStream.UncompressBuffer(this._data);
                         break;
                     case ErpCompressionAlgorithm.LZ4:
                     default:
@@ -146,28 +130,10 @@
                 {
                     case ErpCompressionAlgorithm.None:
                     case ErpCompressionAlgorithm.None2:
-                    case ErpCompressionAlgorithm.None3:
                         this._data = data;
                         break;
                     case ErpCompressionAlgorithm.Zlib:
-                        using (var mso = new MemoryStream())
-                        using (var dos = new DeflaterOutputStream(mso, new Deflater(Deflater.BEST_COMPRESSION)))
-                        {
-                            dos.Write(data, 0, data.Length);
-                            dos.Flush();
-                            dos.Finish();
-                            this._data = mso.ToArray();
-                        }
-                        break;
-                    case ErpCompressionAlgorithm.ZStandard:
-                        using (var mso = new MemoryStream())
-                        using (var zss = new ZstandardStream(mso, CompressionMode.Compress))
-                        {
-                            zss.CompressionLevel = 22;
-                            zss.Write(data, 0, data.Length);
-                            zss.Flush();
-                            this._data = mso.ToArray();
-                        }
+                        this._data = Ionic.Zlib.ZlibStream.CompressBuffer(data);
                         break;
                     default:
                         throw new NotSupportedException($"{nameof(ErpFragment)} compression type {Compression} is not supported!");

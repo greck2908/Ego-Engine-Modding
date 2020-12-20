@@ -22,7 +22,6 @@ namespace EgoEngineLibrary.Data.Pkg
         public PkgDataArrayReference(PkgFile parentFile)
             : base(parentFile)
         {
-            reference = string.Empty;
         }
         
         public override void Read(PkgBinaryReader reader)
@@ -42,7 +41,7 @@ namespace EgoEngineLibrary.Data.Pkg
 
         public override void FromJson(JsonTextReader reader)
         {
-            reference = ((string?)reader.Value)?.Substring(5) ?? string.Empty;
+            reference = ((string)reader.Value).Substring(5);
         }
         public override void ToJson(JsonTextWriter writer)
         {

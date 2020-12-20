@@ -59,7 +59,7 @@ namespace EgoEngineLibrary.Data.Pkg
             switch (reader.TokenType)
             {
                 case JsonToken.PropertyName:
-                    NameData = (string?)reader.Value ?? string.Empty;
+                    NameData = (string)reader.Value;
                     break;
                 default:
                     new Exception("Unexpected token type! " + reader.TokenType);

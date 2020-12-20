@@ -45,12 +45,9 @@
                         }
                     }
                 }
-                xmlStrings = new BinaryXmlString();
-                xmlElements = Array.Empty<BinaryXmlElement>();
-                xmlAttributes = Array.Empty<BinaryXmlAttribute>();
                 return;
             }
-            catch { doc = new XmlDocument(); }
+            catch { doc = null; }
             finally
             {
                 fileStream.Position = 0;
@@ -70,6 +67,7 @@
                 type = XMLType.BinXML;
             }
             r.BaseStream.Position = 0;
+            r = null;
 
             // Create a text XML file
             if (type == XMLType.BinXML)
@@ -87,8 +85,7 @@
                     reader.ReadInt32(); // Section 3 and 4 Total Length/Size
 
                     // Section 3 and 4
-                    xmlStrings = new BinaryXmlString();
-                    xmlStrings.Read(reader);
+                    xmlStrings = new BinaryXmlString(reader);
 
                     // Section 5
                     reader.ReadInt32();
@@ -119,32 +116,26 @@
                     doc.AppendChild(xmlElements[0].CreateElement(doc, this));
                 }
             }
-            else
+            else if (type == XMLType.BXMLBig)
             {
-                xmlStrings = new BinaryXmlString();
-                xmlElements = Array.Empty<BinaryXmlElement>();
-                xmlAttributes = Array.Empty<BinaryXmlAttribute>();
-                if (type == XMLType.BXMLBig)
+                using (XmlBinaryReader reader = new XmlBinaryReader(EndianBitConverter.Big, fileStream))
                 {
-                    using (XmlBinaryReader reader = new XmlBinaryReader(EndianBitConverter.Big, fileStream))
-                    {
-                        reader.ReadBytes(5);
-                        doc = new XmlDocument();
-                        doc.AppendChild(doc.CreateXmlDeclaration("1.0", "UTF-8", "yes"));
-                        doc.AppendChild(doc.CreateComment(type.ToString()));
-                        doc.AppendChild(reader.ReadBxmlElement(doc));
-                    }
+                    reader.ReadBytes(5);
+                    doc = new XmlDocument();
+                    doc.AppendChild(doc.CreateXmlDeclaration("1.0", "UTF-8", "yes"));
+                    doc.AppendChild(doc.CreateComment(type.ToString()));
+                    doc.AppendChild(reader.ReadBxmlElement(doc));
                 }
-                else if (type == XMLType.BXMLLittle)
+            }
+            else if (type == XMLType.BXMLLittle)
+            {
+                using (XmlBinaryReader reader = new XmlBinaryReader(EndianBitConverter.Little, fileStream))
                 {
-                    using (XmlBinaryReader reader = new XmlBinaryReader(EndianBitConverter.Little, fileStream))
-                    {
-                        reader.ReadBytes(5);
-                        doc = new XmlDocument();
-                        doc.AppendChild(doc.CreateXmlDeclaration("1.0", "UTF-8", "yes"));
-                        doc.AppendChild(doc.CreateComment(type.ToString()));
-                        doc.AppendChild(reader.ReadBxmlElement(doc));
-                    }
+                    reader.ReadBytes(5);
+                    doc = new XmlDocument();
+                    doc.AppendChild(doc.CreateXmlDeclaration("1.0", "UTF-8", "yes"));
+                    doc.AppendChild(doc.CreateComment(type.ToString()));
+                    doc.AppendChild(reader.ReadBxmlElement(doc));
                 }
             }
         }

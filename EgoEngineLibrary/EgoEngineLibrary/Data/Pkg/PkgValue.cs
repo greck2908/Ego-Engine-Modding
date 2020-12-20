@@ -70,7 +70,6 @@ namespace EgoEngineLibrary.Data.Pkg
             : base(parentFile)
         {
             valueOffsetType = new PkgOffsetType();
-            complexValueData = new PkgObject(parentFile);
         }
 
         public override void Read(PkgBinaryReader reader)
@@ -146,7 +145,7 @@ namespace EgoEngineLibrary.Data.Pkg
             switch (reader.TokenType)
             {
                 case JsonToken.String:
-                    string val = (string?)reader.Value ?? string.Empty;
+                    string val = (string)reader.Value;
                     if (val.StartsWith("!iar "))
                     {
                         valueOffsetType.Type = 128;

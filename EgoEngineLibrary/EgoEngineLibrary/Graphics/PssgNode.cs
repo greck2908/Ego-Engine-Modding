@@ -41,7 +41,14 @@
         {
             get
             {
-                return data.GetType();
+                if (data != null)
+                {
+                    return data.GetType();
+                }
+                else
+                {
+                    return null;
+                }
             }
         }
 
@@ -85,7 +92,7 @@
             get;
             set;
         }
-        public PssgNode? ParentNode
+        public PssgNode ParentNode
         {
             get;
             set;
@@ -97,7 +104,7 @@
             private set;
         }
 
-        public PssgNode(PssgBinaryReader reader, PssgFile file, PssgNode? node, bool useDataNodeCheck)
+        public PssgNode(PssgBinaryReader reader, PssgFile file, PssgNode node, bool useDataNodeCheck)
         {
             this.File = file;
             this.ParentNode = node;
@@ -195,7 +202,7 @@
             }
             PssgSchema.SetNodeDataTypeIfNull(this.NodeInfo, this.ValueType);
         }
-        public PssgNode(XElement elem, PssgFile file, PssgNode? node)
+        public PssgNode(XElement elem, PssgFile file, PssgNode node)
         {
             this.File = file;
             this.ParentNode = node;
@@ -264,7 +271,7 @@
                 }
             }
         }
-        public PssgNode(string name, PssgFile file, PssgNode? node)
+        public PssgNode(string name, PssgFile file, PssgNode node)
         {
             this.File = file;
             this.ParentNode = node;
@@ -284,34 +291,30 @@
 
             if (!string.IsNullOrEmpty(sNode.LinkAttributeName))
             {
-                PssgNode node;
+                PssgAttributeCollection attrs;
                 string linkAttrName;
                 if (sNode.LinkAttributeName[0] == '^')
                 {
-                    if (this.ParentNode == null) throw new InvalidOperationException("Node without parent cannot reference a parent's attribute.");
-                    node = this.ParentNode;
+                    attrs = this.ParentNode.Attributes;
                     linkAttrName = sNode.LinkAttributeName.Substring(1);
                 }
                 else
                 {
-                    node = this;
+                    attrs = this.Attributes;
                     linkAttrName = sNode.LinkAttributeName;
                 }
 
-                if (node.HasAttribute(linkAttrName))
+                PssgAttribute attr = attrs[linkAttrName];
+                if (attr != null && attr.Value is string)
                 {
-                    PssgAttribute attr = node.Attributes[linkAttrName];
-                    if (attr.Value is string)
+                    string format = (string)attr.Value;
+                    if (format.Contains("float"))
                     {
-                        string format = (string)attr.Value;
-                        if (format.Contains("float"))
-                        {
-                            return typeof(Single[]);
-                        }
-                        else if (format.Contains("ushort"))
-                        {
-                            return typeof(UInt16[]);
-                        }
+                        return typeof(Single[]);
+                    }
+                    else if (format.Contains("ushort"))
+                    {
+                        return typeof(UInt16[]);
                     }
                 }
             }
@@ -447,7 +450,7 @@
         {
             if (this.IsDataNode == true)
             {
-                throw new InvalidOperationException("Cannot append a child node to a data node");
+                return null;
             }
 
             if (this.ChildNodes == null)
@@ -462,11 +465,11 @@
 
             return childNode;
         }
-        public PssgNode? SetChild(PssgNode childNode, PssgNode newChildNode)
+        public PssgNode SetChild(PssgNode childNode, PssgNode newChildNode)
         {
             newChildNode.File = this.File;
             newChildNode.ParentNode = this;
-            PssgNode? node = this.ChildNodes.Set(childNode, newChildNode);
+            PssgNode node = this.ChildNodes.Set(childNode, newChildNode);
             if (node != null) node.NodeInfo = PssgSchema.AddNode(node);
             return node;
         }
@@ -474,6 +477,7 @@
         {
             this.ChildNodes.Remove(childNode);
             childNode.ParentNode = null;
+            childNode.File = null;
         }
 
         public PssgAttribute AddAttribute(string attributeName, object data)
@@ -484,8 +488,8 @@
             }
             else if (this.HasAttribute(attributeName))
             {
-                this.Attributes[attributeName].Value = data;
-                return this.Attributes[attributeName];
+                this.GetAttribute(attributeName).Value = data;
+                return this.GetAttribute(attributeName);
             }
 
             PssgAttribute newAttr = new PssgAttribute(PssgSchema.AddAttribute(this.Name, attributeName, data.GetType()), data, this.File, this);
@@ -495,19 +499,18 @@
         }
         public void RemoveAttribute(string attributeName)
         {
-            if (this.HasAttribute(attributeName))
-                this.Attributes.Remove(this.Attributes[attributeName]);
+            this.Attributes.Remove(this.GetAttribute(attributeName));
         }
 
-        public List<PssgNode> FindNodes(string nodeName, string? attributeName = null, string? attributeValue = null)
+        public List<PssgNode> FindNodes(string nodeName, string attributeName = null, string attributeValue = null)
         {
             List<PssgNode> ret = new List<PssgNode>();
             if (this.Name == nodeName)
             {
                 if (attributeName != null && attributeValue != null)
                 {
-                    if (this.HasAttribute(attributeName) &&
-                        this.Attributes[attributeName].ToString() == attributeValue)
+                    PssgAttribute attr = this.GetAttribute(attributeName);
+                    if (attr != null && attr.ToString() == attributeValue)
                     {
                         ret.Add(this);
                     }
@@ -554,12 +557,20 @@
         }
 
         /// <summary>
+        /// Gets the node attribute associated with the specified attribute name.
+        /// </summary>
+        /// <param name="attributeName">The name of the attribute to get.</param>
+        public PssgAttribute GetAttribute(string attributeName)
+        {
+            return this.Attributes[attributeName];
+        }
+        /// <summary>
         /// Determines whether the current node has an attribute with the specified name.
         /// </summary>
         /// <param name="attributeName">The name of the attribute to find.</param>
         public bool HasAttribute(string attributeName)
         {
-            return this.Attributes.Contains(attributeName);
+            return this.Attributes[attributeName] != null;
         }
         public bool HasAttributes
         {

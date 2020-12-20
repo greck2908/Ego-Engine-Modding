@@ -25,7 +25,6 @@ namespace EgoEngineLibrary.Archive.Erp.Data
             MipMapCount = 1;
             Unknown3 = 0;
             Unknown4 = 0;
-            SurfaceResourceName = string.Empty;
         }
 
         public override void FromFragment(ErpFragment fragment)
